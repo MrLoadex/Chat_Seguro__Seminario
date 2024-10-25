@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuarios Conectados</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+        }
+        #usuarios {
+            width: 80%;
+            margin: auto;
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .usuario {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+        }
+        .usuario:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div id="usuarios"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // Obtener el usuario de las cookies
+        const user = document.cookie.split('; ').find(row => row.startsWith('user=')).split('=')[1];
+
+        // Definir socket.username con el nombre de usuario correcto
+        socket.username = user;
+
+        // Emitir el evento 'login'
+        socket.emit('login', user);
+
+        socket.on('connectedUsers', (users) => {
+            console.log(users)
+            const usuariosDiv = document.getElementById('usuarios');
+            usuariosDiv.innerHTML = '';
+            users.forEach(user => {
+                const usuarioDiv = document.createElement('div');
+                usuarioDiv.className = 'user';
+                usuarioDiv.textContent = user;
+                usuarioDiv.onclick = () => {
+                    window.open(`/chat?user=${user}`, '_blank');
+                };
+                usuariosDiv.appendChild(usuarioDiv);
+            });
+        });
+    </script>
+</body>
+</html>
