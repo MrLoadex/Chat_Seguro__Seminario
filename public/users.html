@@ -35,14 +35,18 @@
     <script>
         const socket = io();
 
-        // Obtener el usuario de las cookies
-        const user = document.cookie.split('; ').find(row => row.startsWith('user=')).split('=')[1];
+        let user;
+        const userCookie = document.cookie.split('; ').find(row => row.startsWith('user='));
+        if (userCookie) {
+            user = userCookie.split('=')[1];
+        } else {
+            window.location.href = '/login';
+        }
 
-        // Definir socket.username con el nombre de usuario correcto
-        socket.username = user;
-
-        // Emitir el evento 'login'
-        socket.emit('login', user);
+        if (user) {
+            socket.username = user;
+            socket.emit('login', user);
+        }
 
         socket.on('connectedUsers', (users) => {
             console.log(users)

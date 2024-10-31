@@ -3,7 +3,11 @@ const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server);
 const session = require('express-session');
+const bcrypt = require('bcrypt');
+const db = require('./db/setup');
 const port = 3000;
+const { bot, sendVerificationCode } = require('./telegram-bot');
+
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -14,6 +18,130 @@ app.use(session({
     saveUninitialized: true,
     cookie: { secure: false } // Change to true if using HTTPS
 }));
+
+// Registration endpoint
+app.post('/register', async (req, res) => {
+    const { username, password, email, phone, verificationMethod } = req.body;
+    
+    try {
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Generate verification code
+        const verificationCode = Math.floor(100000 + Math.random() * 900000);
+        
+        // Store user in database
+        db.run('INSERT INTO users (username, email, password, phone) VALUES (?, ?, ?, ?)',
+            [username, email, hashedPassword, phone],
+            async (err) => {
+                if (err) {
+                    return res.status(400).json({ error: 'Username or email already exists' });
+                }
+                
+                if (verificationMethod === 'telegram') {
+                    // For Telegram verification, phone should be the Telegram chat ID
+                    try {
+                        await sendVerificationCode(phone, verificationCode);
+                        req.session.verificationCode = verificationCode;
+                        req.session.pendingUsername = username;
+                        res.json({ 
+                            success: true, 
+                            message: 'Registration successful! Please verify your Telegram account.',
+                            redirect: '/auth'
+                        });
+                    } catch (error) {
+                        console.error('Telegram error:', error);
+                        res.status(400).json({ 
+                            error: 'Failed to send Telegram verification code. Make sure you provided a valid Telegram chat ID.' 
+                        });
+                    }
+                } else {
+                    // Original SMS verification logic
+                    const response = await fetch('https://textbelt.com/text', {
+                        method: 'post',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone: phone,
+                            message: `Your verification code is: ${verificationCode}`,
+                            key: 'textbelt',
+                        }),
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        req.session.verificationCode = verificationCode;
+                        req.session.pendingUsername = username;
+                        res.json({ 
+                            success: true, 
+                            message: 'Registration successful! Please verify your phone number.' 
+                        });
+                    } else {
+                        res.status(400).json({ 
+                            error: 'Failed to send verification code', 
+                            details: data 
+                        });
+                    }
+                }
+            });
+    } catch (error) {
+        console.error('Error during registration:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Verify endpoint
+app.post('/verify', (req, res) => {
+    const { code } = req.body;
+    
+    if (code === req.session.verificationCode.toString()) {
+        db.run('UPDATE users SET verified = 1 WHERE username = ?',
+            [req.session.pendingUsername],
+            (err) => {
+                if (err) {
+                    return res.status(500).json({ error: 'Verification failed' });
+                }
+                res.json({ success: true });
+            });
+    } else {
+        res.status(400).json({ error: 'Invalid verification code' });
+    }
+});
+
+// Login endpoint
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    db.get('SELECT * FROM users WHERE username = ? AND verified = 1', [username], async (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: 'Server error' });
+        }
+        
+        if (!user) {
+            return res.status(401).json({ error: 'User not found or not verified' });
+        }
+        
+        const validPassword = await bcrypt.compare(password, user.password);
+        
+        if (validPassword) {
+            req.session.user = username;
+            res.cookie('user', username);
+            res.json({ success: true });
+        } else {
+            res.status(401).json({ error: 'Invalid password' });
+        }
+    });
+});
+
+// Add route for register page
+app.get('/register', (req, res) => {
+    res.sendFile(__dirname + '/public/register.html');
+});
+
+// Add this route handler for the auth page
+app.get('/auth', (req, res) => {
+    res.sendFile(__dirname + '/public/auth.html');
+});
 
 // List of connected users
 let connectedUsers = [];
@@ -37,19 +165,6 @@ app.get('/login', (req, res) => {
     res.redirect('/users');
   } else {
     res.sendFile(__dirname + '/public/login.html');
-  }
-});
-
-app.post('/login', (req, res) => {
-  const { user, password } = req.body;
-  // Aquí debería verificar las credenciales contra una base de datos
-  // Por ahora, simplemente aceptaremos a cualquier usuario
-  if (user && password) {
-    req.session.user = user;
-    res.cookie('user', user);
-    res.redirect('/users');
-  } else {
-    res.redirect('/login');
   }
 });
 
@@ -101,5 +216,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(port, () => {
-  console.log(`Servidor corriendo en el puerto ${port}`);
+  console.log(`Servidor corriendo en el puerto http://localhost:${port}`);
 });
