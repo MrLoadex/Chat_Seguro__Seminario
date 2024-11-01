@@ -195,6 +195,35 @@ app.get('/users', checkSession, (req, res) => {
   res.sendFile(__dirname + '/public/users.html');
 });
 
+app.get('/get-chat-id', async (req, res) => {
+    const botToken = req.query.token;
+    
+    if (!botToken) {
+        return res.status(400).json({ error: 'Bot token is required' });
+    }
+
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates`);
+        const data = await response.json();
+
+        if (!data.ok) {
+            return res.status(400).json({ error: 'Invalid bot token' });
+        }
+
+        // Find the most recent chat ID from updates
+        const updates = data.result;
+        if (updates && updates.length > 0) {
+            const chatId = updates[updates.length - 1].message.chat.id;
+            res.json({ chatId: chatId });
+        } else {
+            res.status(404).json({ error: 'No chat history found. Please send a message to your bot first.' });
+        }
+    } catch (error) {
+        console.error('Error fetching chat ID:', error);
+        res.status(500).json({ error: 'Failed to fetch chat ID' });
+    }
+});
+
 io.on('connection', (socket) => {
     
     socket.on('login', (username) => {

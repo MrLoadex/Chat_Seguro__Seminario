@@ -84,6 +84,26 @@
             }
         });
 
+        // Add event listener for bot token input
+        document.querySelector('input[name="botToken"]').addEventListener('blur', async function() {
+            const botToken = this.value.trim();
+            if (botToken) {
+                try {
+                    const response = await fetch(`/get-chat-id?token=${encodeURIComponent(botToken)}`);
+                    const data = await response.json();
+                    
+                    if (data.chatId) {
+                        document.querySelector('input[name="chatId"]').value = data.chatId;
+                    } else {
+                        alert('No chat ID found. Please start a conversation with your bot first by sending any message to it.');
+                    }
+                } catch (error) {
+                    console.error('Error fetching chat ID:', error);
+                    alert('Error fetching chat ID. Please verify your bot token.');
+                }
+            }
+        });
+
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
