@@ -14,7 +14,8 @@ db.run(`CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     phone TEXT NOT NULL,
-    verified INTEGER DEFAULT 0
+    verified INTEGER DEFAULT 0,
+    telegram_bot_token TEXT
 )`);
 
 module.exports = db; 

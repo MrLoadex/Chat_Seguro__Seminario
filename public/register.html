@@ -45,47 +45,77 @@
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
             <input type="email" name="email" placeholder="Email" required>
-            <input type="tel" name="phone" placeholder="Phone Number or Telegram chat ID" required>
-            <select name="verificationMethod" required>
+            <select name="verificationMethod" id="verificationMethod" required>
                 <option value="sms">SMS Verification</option>
                 <option value="telegram">Telegram Verification</option>
             </select>
+            <div id="telegramFields" style="display: none;">
+                <input type="text" name="botToken" placeholder="Telegram Bot Token" required>
+                <input type="text" name="chatId" placeholder="Your Telegram Chat ID" required>
+            </div>
+            <div id="smsFields">
+                <input type="tel" name="phone" placeholder="Phone Number (with country code)" required>
+            </div>
             <button type="submit">Register</button>
         </form>
         <p>Already have an account? <a href="/login">Login here</a></p>
     </div>
 
     <script>
-        document.getElementById('registerForm').addEventListener('submit', async (event) => {
-            event.preventDefault(); 
+        document.getElementById('verificationMethod').addEventListener('change', function() {
+            const telegramFields = document.getElementById('telegramFields');
+            const smsFields = document.getElementById('smsFields');
+            const botTokenInput = telegramFields.querySelector('input[name="botToken"]');
+            const chatIdInput = telegramFields.querySelector('input[name="chatId"]');
+            const phoneInput = smsFields.querySelector('input[name="phone"]');
+            
+            if (this.value === 'telegram') {
+                telegramFields.style.display = 'block';
+                smsFields.style.display = 'none';
+                botTokenInput.required = true;
+                chatIdInput.required = true;
+                phoneInput.required = false;
+            } else {
+                telegramFields.style.display = 'none';
+                smsFields.style.display = 'block';
+                botTokenInput.required = false;
+                chatIdInput.required = false;
+                phoneInput.required = true;
+            }
+        });
 
-            const formData = new FormData(event.target);
-            const data = Object.fromEntries(formData.entries());
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const verificationMethod = formData.get('verificationMethod');
+            
+            const data = {
+                username: formData.get('username'),
+                password: formData.get('password'),
+                email: formData.get('email'),
+                verificationMethod: verificationMethod,
+                phone: verificationMethod === 'telegram' ? formData.get('chatId') : formData.get('phone'),
+                botToken: formData.get('botToken')
+            };
 
             try {
                 const response = await fetch('/register', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data),
+                    body: JSON.stringify(data)
                 });
 
                 const result = await response.json();
-
                 if (result.success) {
-                    alert(result.message);
-                    if (result.redirect) {
-                        window.location.href = result.redirect;
-                    } else {
-                        window.location.href = '/login';
-                    }
+                    window.location.href = '/auth';
                 } else {
-                    alert(result.error);
+                    alert(result.error || 'Registration failed');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('An error occurred. Please try again.');
+                alert('An error occurred during registration');
             }
         });
     </script>

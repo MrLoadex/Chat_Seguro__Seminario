@@ -6,7 +6,7 @@ const session = require('express-session');
 const bcrypt = require('bcrypt');
 const db = require('./db/setup');
 const port = 3000;
-const { bot, sendVerificationCode } = require('./telegram-bot');
+const telegramBot = require('./telegram-bot');
 
 
 app.use(express.urlencoded({ extended: true }));
@@ -21,38 +21,49 @@ app.use(session({
 
 // Registration endpoint
 app.post('/register', async (req, res) => {
-    const { username, password, email, phone, verificationMethod } = req.body;
+    const { username, password, email, phone, verificationMethod, botToken } = req.body;
     
     try {
-        // Hash password
+        // Validate required fields
+        if (!username || !password || !email || !phone) {
+            return res.status(400).json({ error: 'All fields are required' });
+        }
+
+        // Additional validation for Telegram method
+        if (verificationMethod === 'telegram') {
+            if (!botToken) {
+                return res.status(400).json({ error: 'Bot token is required for Telegram verification' });
+            }
+            if (!phone || phone.trim() === '') {
+                return res.status(400).json({ error: 'Telegram Chat ID is required' });
+            }
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Generate verification code
         const verificationCode = Math.floor(100000 + Math.random() * 900000);
         
-        // Store user in database
-        db.run('INSERT INTO users (username, email, password, phone) VALUES (?, ?, ?, ?)',
-            [username, email, hashedPassword, phone],
+        db.run('INSERT INTO users (username, email, password, phone, telegram_bot_token) VALUES (?, ?, ?, ?, ?)',
+            [username, email, hashedPassword, phone, botToken || null],
             async (err) => {
                 if (err) {
+                    console.error('Database error:', err);
                     return res.status(400).json({ error: 'Username or email already exists' });
                 }
                 
                 if (verificationMethod === 'telegram') {
-                    // For Telegram verification, phone should be the Telegram chat ID
                     try {
-                        await sendVerificationCode(phone, verificationCode);
+                        console.log('Sending Telegram verification to:', phone);
+                        await telegramBot.sendVerificationCode(botToken, phone, verificationCode);
                         req.session.verificationCode = verificationCode;
                         req.session.pendingUsername = username;
                         res.json({ 
                             success: true, 
-                            message: 'Registration successful! Please verify your Telegram account.',
-                            redirect: '/auth'
+                            message: 'Registration successful! Please verify your Telegram account.' 
                         });
                     } catch (error) {
                         console.error('Telegram error:', error);
                         res.status(400).json({ 
-                            error: 'Failed to send Telegram verification code. Make sure you provided a valid Telegram chat ID.' 
+                            error: 'Failed to send Telegram verification code. Please check your bot token and chat ID.' 
                         });
                     }
                 } else {

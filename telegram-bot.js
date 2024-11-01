@@ -2,77 +2,41 @@ require('dotenv').config();
 
 const TelegramBot = require('node-telegram-bot-api');
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-    polling: true,
-    request: {
-        timeout: 30000
+class TelegramBotManager {
+    constructor() {
+        this.bots = new Map();
     }
-});
 
-// Add error handlers
-bot.on('polling_error', (error) => {
-    console.log('Polling error:', error);
-    if (error.code === 'EFATAL') {
-        console.log('Fatal polling error occurred. Attempting to reconnect...');
-        
-        // Stop current polling
-        bot.stopPolling()
-            .then(() => {
-                // Wait 5 seconds before attempting to reconnect
-                setTimeout(() => {
-                    console.log('Attempting to restart polling...');
-                    bot.startPolling()
-                        .then(() => console.log('Successfully reconnected!'))
-                        .catch(err => console.error('Failed to restart polling:', err));
-                }, 5000);
-            })
-            .catch(err => console.error('Error stopping polling:', err));
-    }
-});
-
-bot.on('error', (error) => {
-    console.log('General bot error:', error.message);
-});
-
-// Store temporary user data
-const pendingVerifications = new Map();
-
-// Handle /start command
-bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-    bot.sendMessage(chatId, `Welcome! Your Chat ID is: ${chatId}\nPlease use this ID when registering on our website.`);
-});
-
-// Handle verification requests
-function sendVerificationCode(chatId, verificationCode) {
-    // Remove any '+' prefix but keep chatId as a string
-    const cleanedChatId = chatId.toString().replace('+', '');
-    
-    // Add more robust error handling
-    return bot.sendMessage(cleanedChatId, `Your verification code is: ${verificationCode}`)
-        .catch(error => {
-            // Log the full error object for debugging
-            console.error('Failed to send verification code. Full error:', error);
-            
-            // Handle specific error types
-            if (error.code === 'EFATAL') {
-                console.error('Bot connection error - please verify your bot token and internet connection');
+    async sendVerificationCode(botToken, chatId, verificationCode) {
+        try {
+            if (!botToken || !chatId) {
+                throw new Error('Bot token and chat ID are required');
             }
+
+            let bot = this.bots.get(botToken);
             
-            if (error.response && error.response.statusCode === 403) {
-                console.error('Bot is blocked by the user or chat not found');
+            if (!bot) {
+                bot = new TelegramBot(botToken, { polling: false });
+                this.bots.set(botToken, bot);
             }
+
+            const cleanedChatId = chatId.toString().replace(/[^0-9-]/g, '');
             
+            if (!cleanedChatId) {
+                throw new Error('Invalid chat ID format');
+            }
+
+            console.log('Sending to chat ID:', cleanedChatId);
+            return await bot.sendMessage(cleanedChatId, `Your verification code is: ${verificationCode}`);
+        } catch (error) {
+            console.error('Telegram error:', error);
             throw {
                 message: 'Failed to send verification code',
                 originalError: error,
-                chatId: cleanedChatId
+                chatId: chatId
             };
-        });
+        }
+    }
 }
 
-module.exports = {
-    bot,
-    pendingVerifications,
-    sendVerificationCode
-}; 
+module.exports = new TelegramBotManager(); 
