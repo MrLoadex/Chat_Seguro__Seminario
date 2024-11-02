@@ -50,11 +50,11 @@
                 <option value="telegram">Telegram Verification</option>
             </select>
             <div id="telegramFields" style="display: none;">
-                <input type="text" name="botToken" placeholder="Telegram Bot Token" required>
-                <input type="text" name="chatId" placeholder="Your Telegram Chat ID" required>
+                <input type="text" name="botToken" placeholder="Telegram Bot Token">
+                <input type="text" name="chatId" placeholder="Your Telegram Chat ID">
             </div>
             <div id="smsFields">
-                <input type="tel" name="phone" placeholder="Phone Number (with country code)" required>
+                <input type="tel" name="phone" placeholder="Phone Number (with country code)">
             </div>
             <button type="submit">Register</button>
         </form>
@@ -74,16 +74,16 @@
                 smsFields.style.display = 'none';
                 botTokenInput.required = true;
                 chatIdInput.required = true;
-                phoneInput.required = false;
+                phoneInput.required = false; // Phone input not required for Telegram
             } else {
                 telegramFields.style.display = 'none';
                 smsFields.style.display = 'block';
-                botTokenInput.required = false;
-                chatIdInput.required = false;
-                phoneInput.required = true;
+                botTokenInput.required = false; // Bot token not required for SMS
+                chatIdInput.required = false; // Chat ID not required for SMS
+                phoneInput.required = true; // Phone input required for SMS
             }
         });
-
+    
         // Add event listener for bot token input
         document.querySelector('input[name="botToken"]').addEventListener('blur', async function() {
             const botToken = this.value.trim();
@@ -103,7 +103,7 @@
                 }
             }
         });
-
+    
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -115,9 +115,10 @@
                 email: formData.get('email'),
                 verificationMethod: verificationMethod,
                 phone: verificationMethod === 'telegram' ? formData.get('chatId') : formData.get('phone'),
-                botToken: formData.get('botToken')
-            };
+                botToken: formData.get('botToken') // This line includes botToken regardless of verification method
 
+            };
+        
             try {
                 const response = await fetch('/register', {
                     method: 'POST',
@@ -126,7 +127,7 @@
                     },
                     body: JSON.stringify(data)
                 });
-
+    
                 const result = await response.json();
                 if (result.success) {
                     window.location.href = '/auth';
