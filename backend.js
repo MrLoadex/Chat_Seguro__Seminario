@@ -88,6 +88,7 @@ app.post('/register', async (req, res) => {
                             message: 'Registration successful! Please verify your phone number.' 
                         });
                     } else {
+                        console.error('SMS API ERROR:', data);
                         res.status(400).json({ 
                             error: 'Failed to send verification code', 
                             details: data 
